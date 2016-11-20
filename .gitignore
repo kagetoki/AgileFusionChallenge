@@ -3,3 +3,16 @@
 ################################################################################
 
 /.vs
+/packages
+/ProcessMonitor/obj/Debug
+/ProcessMonitor/bin/Debug
+/ProcessMonitorTests/obj/Debug
+/ProcessMonitorTests/bin/Debug
+/ResourceMonitorWeb/bin
+/ResourceMonitorWeb/obj/Debug
+/ResourceMonitorWeb/Web.Release.config
+/ResourceMonitorWeb/Web.Debug.config
+/TestConsole/obj/Debug
+/TestConsole/bin/Debug
+/ThreadUtils/obj/Debug
+/ThreadUtils/bin/Debug
