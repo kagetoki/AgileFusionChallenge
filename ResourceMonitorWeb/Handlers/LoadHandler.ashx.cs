@@ -13,73 +13,108 @@ using System.Text;
 
 namespace ResourceMonitorWeb.Handlers
 {
-    /// <summary>
-    /// Summary description for LoadHandler
-    /// </summary>
-    public class LoadHandler : IHttpHandler
-    {
-        private readonly IList<WebSocket> Clients = new List<WebSocket>();
-        private readonly ReaderWriterLockSlim _locker = new ReaderWriterLockSlim();
-		public LoadHandler()
+	/// <summary>
+	/// Summary description for LoadHandler
+	/// </summary>
+	public class LoadHandler : IHttpHandler
+	{
+		private List<WebSocket> Clients = new List<WebSocket>();
+		private object _sync = new object();
+		public void ProcessRequest(HttpContext context)
 		{
-			ProcessMonitor.Monitor.HighLoadHappend += (s, e) => SendMessage(e);
-		}
-        public void ProcessRequest(HttpContext context)
-        {
-            if (context.IsWebSocketRequest)
-            {
-                context.AcceptWebSocketRequest(WebSocketRequest);
-            }
-        }
-		
-        private async Task WebSocketRequest(AspNetWebSocketContext context)
-        {
-            var socket = context.WebSocket;
-            _locker.EnterWriteLock();
-            try
-            {
-                Clients.Add(socket);
-            }
-            finally
-            {
-                _locker.ExitWriteLock();
-            }
-        }
-
-		private void SendMessage(ResourceUsageEventArgs model)
-		{
-			var message = JsonConvert.SerializeObject(model);
-			var bytes = Encoding.UTF8.GetBytes(message);
-			var arraySegment = new ArraySegment<byte>(bytes);
-			for(int i = 0; i < Clients.Count; i++)
+			//Checks if the query is WebSocket request. 
+			if (context.IsWebSocketRequest)
 			{
-				var client = Clients[i];
-				try
+				//If yes, we attach the asynchronous handler.
+				context.AcceptWebSocketRequest(WebSocketRequestHandler);
+			}
+		}
+
+		public bool IsReusable { get { return false; } }
+
+		//Asynchronous request handler.
+		public async Task WebSocketRequestHandler(AspNetWebSocketContext webSocketContext)
+		{
+			//Gets the current WebSocket object.
+			WebSocket webSocket = webSocketContext.WebSocket;
+			lock (_sync)
+			{
+				Clients.Add(webSocket);
+			}
+			/*We define a certain constant which will represent
+            size of received data. It is established by us and 
+            we can set any value. We know that in this case the size of the sent
+            data is very small.
+            */
+			const int maxMessageSize = 1024;
+
+			//Buffer for received bits.
+			var receivedDataBuffer = new ArraySegment<byte>(new byte[maxMessageSize]);
+
+			var cancellationToken = new CancellationToken();
+
+			//Checks WebSocket state.
+			while (webSocket.State == WebSocketState.Open)
+			{
+				//Reads data.
+				WebSocketReceiveResult webSocketReceiveResult =
+				  await webSocket.ReceiveAsync(receivedDataBuffer, cancellationToken);
+
+				//If input frame is cancelation frame, send close command.
+				if (webSocketReceiveResult.MessageType == WebSocketMessageType.Close)
 				{
-					client.SendAsync(arraySegment, WebSocketMessageType.Text, true, CancellationToken.None);
+					await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure,
+					  string.Empty, cancellationToken);
+					lock (_sync)
+					{
+						Clients.Remove(webSocket);
+					}
 				}
-				catch (ObjectDisposedException)
+				else
 				{
-					_locker.EnterWriteLock();
-					try
+					byte[] payloadData = receivedDataBuffer.Array.Where(b => b != 0).ToArray();
+
+					//Because we know that is a string, we convert it.
+					string receiveString =
+					  Encoding.UTF8.GetString(payloadData, 0, payloadData.Length);
+					var stats = ProcessMonitor.Monitor.GetSystemResourceConsumption();
+					//Converts string to byte array.
+					var newString = $"CPU Usage: {stats.CpuUsage}, RAM usage: {stats.RamUsage}";
+					var sb = new StringBuilder(newString);
+					foreach(var proc in stats.Processes)
 					{
-						Clients.Remove(client);
-						i--;
+						sb.AppendLine(proc.ToString());
 					}
-					finally
-					{
-						_locker.ExitWriteLock();
-					}
+					newString = sb.ToString();
+					byte[] bytes = Encoding.UTF8.GetBytes(newString);
+
+					//Sends data back.
+					await webSocket.SendAsync(new ArraySegment<byte>(bytes),
+					  WebSocketMessageType.Text, true, cancellationToken);
 				}
 			}
 		}
 
-        public bool IsReusable
-        {
-            get
-            {
-                return false;
-            }
-        }
-    }
+		private async Task SendToAll(ResourceUsageEventArgs data)
+		{
+			for(int i = 0; i < Clients.Count; i++)
+			{
+				var client = Clients[i];
+				var message = JsonConvert.SerializeObject(data);
+				var bytes = new ArraySegment<byte>(Encoding.UTF8.GetBytes(message));
+				try
+				{
+					await client.SendAsync(bytes, WebSocketMessageType.Text, true, CancellationToken.None);
+				}
+				catch (ObjectDisposedException)
+				{
+					lock (_sync)
+					{
+						Clients.RemoveAt(i);
+						i--;
+					}
+				}
+			}
+		}
+	}
 }

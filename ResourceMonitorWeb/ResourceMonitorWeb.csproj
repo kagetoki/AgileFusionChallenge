@@ -16,7 +16,7 @@
     <RootNamespace>ResourceMonitorWeb</RootNamespace>
     <AssemblyName>ResourceMonitorWeb</AssemblyName>
     <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
-    <UseIISExpress>true</UseIISExpress>
+    <UseIISExpress>false</UseIISExpress>
     <IISExpressSSLPort />
     <IISExpressAnonymousAuthentication />
     <IISExpressWindowsAuthentication />
@@ -197,7 +197,9 @@
           <AutoAssignPort>True</AutoAssignPort>
           <DevelopmentServerPort>57901</DevelopmentServerPort>
           <DevelopmentServerVPath>/</DevelopmentServerVPath>
-          <IISUrl>http://localhost:57901/</IISUrl>
+          <IISUrl>http://localhost/ResourceMonitorWeb</IISUrl>
+          <OverrideIISAppRootUrl>True</OverrideIISAppRootUrl>
+          <IISAppRootUrl>http://localhost/ResourceMonitorWeb</IISAppRootUrl>
           <NTLMAuthentication>False</NTLMAuthentication>
           <UseCustomServer>False</UseCustomServer>
           <CustomServerUrl>
