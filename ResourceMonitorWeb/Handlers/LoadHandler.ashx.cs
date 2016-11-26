@@ -104,6 +104,10 @@ namespace ResourceMonitorWeb.Handlers
                     {
                         Clients.RemoveAt(i);
                         i--;
+                        if (Clients.Count == 0)
+                        {
+                            ProcessMonitor.Monitor.Stop();
+                        }
                     }
                 }
             }
