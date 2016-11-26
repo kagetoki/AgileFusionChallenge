@@ -14,7 +14,6 @@ namespace ResourceMonitorWeb
         {
             AreaRegistration.RegisterAllAreas();
             RouteConfig.RegisterRoutes(RouteTable.Routes);
-			ProcessMonitor.Monitor.Start();
         }
 
 		protected void Application_End()

@@ -11,12 +11,15 @@ namespace ProcessMonitor
     {
         public static event EventHandler<ResourceUsageEventArgs> HighLoadHappend;
         public static event EventHandler<ResourceUsageEventArgs> ResourceSnapshot;
+        public static event Action Started;
+        public static event Action Stopped;
         public static SystemResourceConsumptionModel Current { get; private set; }
         public static ComputerInfo ComputerInfo = new ComputerInfo();
         public static bool IsRunning { get { return _worker.IsRunning; } }
         private static double CpuThreshold = 80d;
         private static long RamThreshold = (long)(ComputerInfo.TotalPhysicalMemory * 0.8);
-        private static AsyncIterationWorker<SystemResourceConsumptionModel> _worker = new AsyncIterationWorker<SystemResourceConsumptionModel>(GatherInfo, 1000);
+        private static AsyncIterationWorker<SystemResourceConsumptionModel> _worker = 
+            new AsyncIterationWorker<SystemResourceConsumptionModel>(GatherInfo, 1000);
 
         public static IList<ProcessModel> GetProcesses()
         {
@@ -26,18 +29,25 @@ namespace ProcessMonitor
             {
                 foreach (var process in processes)
                 {
-                    using (process)
-                    using (var perfomanceCounter = new PerformanceCounter("Process", "% Processor Time", process.ProcessName, true))
+                    try
                     {
-                        perfomanceCounter.NextValue();
-                        var model = new ProcessModel
+                        using (process)
+                        using (var perfomanceCounter = new PerformanceCounter("Process", "% Processor Time", process.ProcessName, true))
                         {
-                            Name = process.ProcessName,
-                            MemoryConsumption = process.WorkingSet64,
-                            PID = process.Id,
-                            CpuUsage = perfomanceCounter.NextValue()
-                        };
-                        result.Add(model);
+                            perfomanceCounter.NextValue();
+                            var model = new ProcessModel
+                            {
+                                Name = process.ProcessName,
+                                MemoryConsumption = process.WorkingSet64,
+                                PID = process.Id,
+                                CpuUsage = perfomanceCounter.NextValue()
+                            };
+                            result.Add(model);
+                        }
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        Stop();
                     }
                 }
 
@@ -77,6 +87,7 @@ namespace ProcessMonitor
                 _worker.IterationCompleted += (s, e) => { Current = e.Result; };
             }
             _worker.Start();
+            Started?.Invoke();
         }
         
         private static SystemResourceConsumptionModel GatherInfo()
@@ -93,6 +104,7 @@ namespace ProcessMonitor
         public static void Stop()
         {
             _worker.Stop();
+            Stopped?.Invoke();
         }
     }
 }
