@@ -26,6 +26,11 @@ namespace ResourceMonitorWeb.Handlers
 			{
 				context.AcceptWebSocketRequest(WebSocketRequestHandler);
                 ProcessMonitor.Monitor.ResourceSnapshot +=  async (s, e) => { await SendToAll(e); };
+                ProcessMonitor.Monitor.HighLoadHappend += async (s, e) => 
+                {
+                    await SendToAll("High load happend!");
+                    await SendToAll(e);
+                };
                 ProcessMonitor.Monitor.Stopped += async () => await SendToAll("Monitor stopped");
                 ProcessMonitor.Monitor.Start();
 			}

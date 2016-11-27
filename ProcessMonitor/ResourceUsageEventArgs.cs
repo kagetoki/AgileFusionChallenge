@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace ProcessMonitor
 {
@@ -7,11 +8,13 @@ namespace ProcessMonitor
         public double CpuUsage { get; private set; }
         public long RamUsage { get; private set; }
         public string MachineName { get; private set; }
-        public ResourceUsageEventArgs(double cpuUsage, long ramUsage, string machineName = null)
+        public IList<ProcessModel> Processes { get; private set; }
+        public ResourceUsageEventArgs(double cpuUsage, long ramUsage, IList<ProcessModel> processes = null, string machineName = null)
         {
             CpuUsage = cpuUsage;
             RamUsage = ramUsage;
             MachineName = machineName ?? Environment.MachineName;
+            Processes = processes;
         }
 
         public override string ToString()

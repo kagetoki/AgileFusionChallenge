@@ -93,7 +93,7 @@ namespace ProcessMonitor
         private static SystemResourceConsumptionModel GatherInfo()
         {
             var result = GetSystemResourceConsumption();
-            var eventArgs = new ResourceUsageEventArgs(result.CpuUsage, result.RamUsage);
+            var eventArgs = new ResourceUsageEventArgs(result.CpuUsage, result.RamUsage, result.Processes);
             ResourceSnapshot?.Invoke(null, eventArgs);
             if (result.CpuUsage >= CpuThreshold || result.RamUsage >= RamThreshold)
             {
