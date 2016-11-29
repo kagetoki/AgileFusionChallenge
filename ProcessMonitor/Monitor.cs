@@ -4,11 +4,13 @@ using System.Diagnostics;
 using System.Linq;
 using Microsoft.VisualBasic.Devices;
 using ThreadUtils;
+using System.Collections.Concurrent;
 
 namespace ProcessMonitor
 {
     public static class Monitor
     {
+        private static object _sync = new object();
         public static event EventHandler<ResourceUsageEventArgs> HighLoadHappend;
         public static event EventHandler<ResourceUsageEventArgs> ResourceSnapshot;
         public static event Action Started;
@@ -20,7 +22,8 @@ namespace ProcessMonitor
         private static long RamThreshold = (long)(ComputerInfo.TotalPhysicalMemory * 0.8);
         private static AsyncIterationWorker<SystemResourceConsumptionModel> _worker = 
             new AsyncIterationWorker<SystemResourceConsumptionModel>(GatherInfo, 1000);
-
+        private static PerformanceCounter _totalResourceCounter;
+        private static IDictionary<int, PerformanceCounter> _perfomanceCounters = new ConcurrentDictionary<int, PerformanceCounter>();
         public static IList<ProcessModel> GetProcesses()
         {
             var processes = Process.GetProcesses();
@@ -31,9 +34,14 @@ namespace ProcessMonitor
                 {
                     try
                     {
-                        using (process)
-                        using (var perfomanceCounter = new PerformanceCounter("Process", "% Processor Time", process.ProcessName, true))
+                        using (process)                        
                         {
+                            PerformanceCounter perfomanceCounter;
+                            if (!_perfomanceCounters.TryGetValue(process.Id, out perfomanceCounter))
+                            {
+                                perfomanceCounter = new PerformanceCounter("Process", "% Processor Time", process.ProcessName, true);
+                                _perfomanceCounters.Add(process.Id, perfomanceCounter);
+                            }
                             perfomanceCounter.NextValue();
                             var model = new ProcessModel
                             {
@@ -67,27 +75,29 @@ namespace ProcessMonitor
 
         public static SystemResourceConsumptionModel GetSystemResourceConsumption()
         {
+            if (!IsRunning) { return Current; }
             var result = new SystemResourceConsumptionModel();
             result.Processes = GetProcesses();
-            using (var cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total", true))
-            {
-                cpuCounter.NextValue();
-                var value = cpuCounter.NextValue();
-                result.CpuUsage = value;
-                result.RamUsage = result.Processes.Sum(p => p.MemoryConsumption);
-            }
-            
+
+            var value = _totalResourceCounter.NextValue();
+            result.CpuUsage = value;
+            result.RamUsage = result.Processes.Sum(p => p.MemoryConsumption);
+
             return result;
         }
 
         public static void Start()
         {
-            if (!_worker.IsStarted)
+            lock (_sync)
             {
-                _worker.IterationCompleted += (s, e) => { Current = e.Result; };
+                if (!_worker.IsStarted)
+                {
+                    _worker.IterationCompleted += (s, e) => { Current = e.Result; };
+                    _totalResourceCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total", true);
+                }
+                _worker.Start();
+                Started?.Invoke();
             }
-            _worker.Start();
-            Started?.Invoke();
         }
         
         private static SystemResourceConsumptionModel GatherInfo()
@@ -103,8 +113,27 @@ namespace ProcessMonitor
         }
         public static void Stop()
         {
-            _worker.Stop();
-            Stopped?.Invoke();
+            lock (_sync)
+            {
+                try
+                {
+                    _worker.Stop();
+                    Stopped?.Invoke();
+                }
+                finally
+                {
+                    if (_totalResourceCounter != null)
+                    {
+                        _totalResourceCounter.Dispose();
+                        _totalResourceCounter = null;
+                    }
+                    foreach(var counter in _perfomanceCounters.Values)
+                    {
+                        counter.Dispose();
+                    }
+                    _perfomanceCounters.Clear();
+                }
+            }
         }
     }
 }
