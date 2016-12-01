@@ -42,7 +42,6 @@ namespace ProcessMonitor
                                 perfomanceCounter = new PerformanceCounter("Process", "% Processor Time", process.ProcessName, true);
                                 _perfomanceCounters.Add(process.Id, perfomanceCounter);
                             }
-                            perfomanceCounter.NextValue();
                             var model = new ProcessModel
                             {
                                 Name = process.ProcessName,
@@ -75,7 +74,7 @@ namespace ProcessMonitor
 
         public static SystemResourceConsumptionModel GetSystemResourceConsumption()
         {
-            if (!IsRunning) { return Current; }
+            if (!IsRunning || _totalResourceCounter == null) { return Current; }
             var result = new SystemResourceConsumptionModel();
             result.Processes = GetProcesses();
 
